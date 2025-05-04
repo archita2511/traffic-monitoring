@@ -47,25 +47,45 @@ def generate_stream(path):
 
             cv2.rectangle(frame, (x3, y3), (x4, y4), (0, 255, 0), 2)
 
-            # SPEED CHECK (down)
+            # Downward direction
             if cy1 - offset < cy < cy1 + offset:
                 vh_down[obj_id] = count
+
             if obj_id in vh_down and cy2 - offset < cy < cy2 + offset:
                 pixel_distance = abs(cy2 - cy1)
                 real_world_distance = meters_per_pixel * pixel_distance
                 frames_crossed = count - vh_down[obj_id]
-                speed = (real_world_distance / (frames_crossed * 2 / fps)) * 3.6
+                elapsed_time = (frames_crossed * 2) / fps
+
                 if obj_id not in counter:
                     counter.append(obj_id)
-                    if speed > 40:
-                        cv2.putText(frame, "⚠️ Overspeed", (x3, y3 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
+                    speed_kmh = (real_world_distance / elapsed_time) * 3.6
+                    label = f"{int(speed_kmh)} Km/h"
+                    cv2.putText(frame, label, (x4, y4), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
 
-        # draw lines
+            # Upward direction
+            if cy2 - offset < cy < cy2 + offset:
+                vh_up[obj_id] = count
+
+            if obj_id in vh_up and cy1 - offset < cy < cy1 + offset:
+                pixel_distance = abs(cy2 - cy1)
+                real_world_distance = meters_per_pixel * pixel_distance
+                frames_crossed = count - vh_up[obj_id]
+                elapsed_time = (frames_crossed * 2) / fps
+
+                if obj_id not in counter1:
+                    counter1.append(obj_id)
+                    speed_kmh = (real_world_distance / elapsed_time) * 3.6
+                    label = f"{int(speed_kmh)} Km/h"
+                    cv2.putText(frame, label, (x4, y4), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+
+        # Draw lines
         cv2.line(frame, (274, cy1), (814, cy1), (255, 255, 255), 1)
         cv2.line(frame, (177, cy2), (927, cy2), (255, 255, 255), 1)
 
-        # encode as jpeg
         _, jpeg = cv2.imencode('.jpg', frame)
         frame_bytes = jpeg.tobytes()
         yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+
+    cap.release()
