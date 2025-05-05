@@ -19,6 +19,9 @@ def generate_stream(path):
     with open("coco.txt", "r") as f:
         class_list = f.read().splitlines()
 
+    # To persist banner for a few frames
+    banner_frames = 0
+
     while True:
         ret, frame = cap.read()
         if not ret:
@@ -61,6 +64,11 @@ def generate_stream(path):
                     counter.append(obj_id)
                     speed_kmh = (real_world_distance / elapsed_time) * 3.6
                     label = f"{int(speed_kmh)} Km/h"
+
+                    speed_limit = 40
+                    if speed_kmh > speed_limit:
+                        banner_frames = 30  # Show banner for next 30 frames
+
                     cv2.putText(frame, label, (x4, y4), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
 
             # Upward direction
@@ -77,7 +85,19 @@ def generate_stream(path):
                     counter1.append(obj_id)
                     speed_kmh = (real_world_distance / elapsed_time) * 3.6
                     label = f"{int(speed_kmh)} Km/h"
+
+                    speed_limit = 40
+                    if speed_kmh > speed_limit:
+                        banner_frames = 30  # Show banner for next 30 frames
+
                     cv2.putText(frame, label, (x4, y4), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+
+        # Show top banner if speeding detected in recent frames
+        if banner_frames > 0:
+            cv2.rectangle(frame, (0, 0), (1020, 40), (0, 0, 255), -1)
+            cv2.putText(frame, "Over Speeding!", (20, 30), cv2.FONT_HERSHEY_SIMPLEX,
+                        1, (255, 255, 255), 2)
+            banner_frames -= 1
 
         # Draw lines
         cv2.line(frame, (274, cy1), (814, cy1), (255, 255, 255), 1)
