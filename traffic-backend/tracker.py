@@ -1,30 +1,35 @@
 from norfair import Detection, Tracker
-from norfair.distances import iou
 import numpy as np
 
-tracker = Tracker(distance_function=iou, distance_threshold=0.3)
+# Create a BYTE-like tracker using Norfair
+tracker = Tracker(distance_function="euclidean", distance_threshold=40)
 
 def update_tracker(detections):
+    # Convert YOLO boxes to Norfair detections (center points)
     norfair_detections = []
-    for x1, y1, x2, y2 in detections:
-        bbox = np.array([x1, y1, x2, y2], dtype=np.float32)
+    for box in detections:
+        x1, y1, x2, y2 = box
+        cx = (x1 + x2) / 2
+        cy = (y1 + y2) / 2
+        points = np.array([[cx, cy]])
+        norfair_detections.append(Detection(points=points))
 
-        # Dummy point just to satisfy Norfair's internal checks
-        dummy_points = np.array([[x1, y1]])  # Single point
-
-        norfair_detections.append(
-            Detection(
-                points=dummy_points,       # 👈 Required (even if unused)
-                scores=np.array([1.0]),    # 👈 Also required
-                data=bbox                  # 👈 Used by IoU
-            )
-        )
-
+    # Update tracker with new detections
     tracked_objects = tracker.update(detections=norfair_detections)
 
+    # Convert back to [x1, y1, x2, y2, id]
     output = []
     for obj in tracked_objects:
-        x1, y1, x2, y2 = obj.last_detection.data
-        output.append([int(x1), int(y1), int(x2), int(y2), obj.id])
+        cx, cy = obj.estimate[0]
+        obj_id = obj.id
+
+        # Reconstruct a box around the tracked center (optional sizing)
+        box_size = 40  # adjust as needed
+        x1 = int(cx - box_size / 2)
+        y1 = int(cy - box_size / 2)
+        x2 = int(cx + box_size / 2)
+        y2 = int(cy + box_size / 2)
+
+        output.append([x1, y1, x2, y2, obj_id])
 
     return output
