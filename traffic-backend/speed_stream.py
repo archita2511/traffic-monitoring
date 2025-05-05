@@ -119,3 +119,7 @@ with open('car_details.csv', mode='w', newline='') as file:
 cap.release()
 output.release()
 cv2.destroyAllWindows()
+
+cap.release()
+output.release()
+cv2.destroyAllWindows()
