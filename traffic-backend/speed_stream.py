@@ -1,26 +1,49 @@
 import cv2
-from ultralytics import YOLO
-from tracker import Tracker
 import pandas as pd
+import numpy as np
+from ultralytics import YOLO
+from tracker import update_tracker
+import time
+import csv
 
-def generate_stream(path):
-    model = YOLO("yolov8s.pt")
-    cap = cv2.VideoCapture(path)
-    tracker = Tracker(max_distance=40)
+# Load the YOLOv8 Medium model (better accuracy than 's' version)
+model = YOLO('yolov8s.pt')
 
-    meters_per_pixel = 0.2
-    cy1, cy2 = 322, 368
-    offset = 10
-    vh_down, vh_up, counter, counter1 = {}, {}, [], []
+# Mouse callback function for pixel inspection (optional)
+def RGB(event, x, y, flags, param):
+    if event == cv2.EVENT_MOUSEMOVE:
+        print([x, y])
 
-    fps = cap.get(cv2.CAP_PROP_FPS)
-    count = 0
+cv2.namedWindow('RGB')
+cv2.setMouseCallback('RGB', RGB)
 
-    with open("coco.txt", "r") as f:
-        class_list = f.read().splitlines()
+# Load video
+cap = cv2.VideoCapture("veh2.mp4")
+width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+fps = int(cap.get(cv2.CAP_PROP_FPS))
 
-    # To persist banner for a few frames
-    banner_frames = 0
+# Output writer
+output = cv2.VideoWriter('output_tracking.mp4', cv2.VideoWriter_fourcc(*'mp4v'), fps, (1020, 500))
+
+# Load class names
+with open("coco.txt", "r") as f:
+    class_list = f.read().split("\n")
+
+
+cy1 = 322
+cy2 = 368
+offset = 6
+vh_down = {}
+counter = []
+vh_up = {}
+counter1 = []
+
+count = 0
+
+with open('car_details.csv', mode='w', newline='') as file:
+    writer = csv.writer(file)
+    writer.writerow(["Car ID", "Direction", "Speed (Km/h)", "Timestamp"])
 
     while True:
         ret, frame = cap.read()
@@ -28,84 +51,71 @@ def generate_stream(path):
             break
 
         count += 1
-        if count % 2 != 0:
+        if count % 3 != 1:
             continue
 
         frame = cv2.resize(frame, (1020, 500))
-        results = model.predict(frame)
+
+        # Improved: Lower confidence threshold
+        results = model.predict(frame, conf=0.3)
         boxes = results[0].boxes.data
         px = pd.DataFrame(boxes).astype("float")
-
         detections = []
+
         for _, row in px.iterrows():
             x1, y1, x2, y2 = map(int, row[:4])
             class_id = int(row[5])
-            if 'car' in class_list[class_id]:
+            class_name = class_list[class_id]
+            if class_name in ['car', 'Van', 'truck', 'bus']:
                 detections.append([x1, y1, x2, y2])
 
-        bbox_id = tracker.update(detections)
-        for bbox in bbox_id:
-            x3, y3, x4, y4, obj_id = bbox
+        bbox_id = update_tracker(detections)
+
+        for x3, y3, x4, y4, obj_id in bbox_id:
             cx, cy = (x3 + x4) // 2, (y3 + y4) // 2
+            cv2.rectangle(frame, (x3, y3), (x4, y4), (0, 0, 255), 2)
 
-            cv2.rectangle(frame, (x3, y3), (x4, y4), (0, 255, 0), 2)
-
-            # Downward direction
+            # DOWN direction
             if cy1 - offset < cy < cy1 + offset:
-                vh_down[obj_id] = count
-
+                vh_down[obj_id] = time.time()
             if obj_id in vh_down and cy2 - offset < cy < cy2 + offset:
-                pixel_distance = abs(cy2 - cy1)
-                real_world_distance = meters_per_pixel * pixel_distance
-                frames_crossed = count - vh_down[obj_id]
-                elapsed_time = (frames_crossed * 2) / fps
-
+                elapsed = time.time() - vh_down[obj_id]
                 if obj_id not in counter:
                     counter.append(obj_id)
-                    speed_kmh = (real_world_distance / elapsed_time) * 3.6
-                    label = f"{int(speed_kmh)} Km/h"
+                    speed_kmh = (10 / elapsed) * 3.6
+                    timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+                    writer.writerow([obj_id, "Down", int(speed_kmh), timestamp])
+                    cv2.putText(frame, f"{obj_id}", (x3, y3), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
+                    cv2.putText(frame, f"{int(speed_kmh)} Km/h", (x4, y4), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
 
-                    speed_limit = 40
-                    if speed_kmh > speed_limit:
-                        banner_frames = 30  # Show banner for next 30 frames
-
-                    cv2.putText(frame, label, (x4, y4), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
-
-            # Upward direction
+            # UP direction
             if cy2 - offset < cy < cy2 + offset:
-                vh_up[obj_id] = count
-
+                vh_up[obj_id] = time.time()
             if obj_id in vh_up and cy1 - offset < cy < cy1 + offset:
-                pixel_distance = abs(cy2 - cy1)
-                real_world_distance = meters_per_pixel * pixel_distance
-                frames_crossed = count - vh_up[obj_id]
-                elapsed_time = (frames_crossed * 2) / fps
-
+                elapsed = time.time() - vh_up[obj_id]
                 if obj_id not in counter1:
                     counter1.append(obj_id)
-                    speed_kmh = (real_world_distance / elapsed_time) * 3.6
-                    label = f"{int(speed_kmh)} Km/h"
+                    speed_kmh = (10 / elapsed) * 3.6
+                    timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+                    writer.writerow([obj_id, "Up", int(speed_kmh), timestamp])
+                    cv2.putText(frame, f"{obj_id}", (x3, y3), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
+                    cv2.putText(frame, f"{int(speed_kmh)} Km/h", (x4, y4), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
 
-                    speed_limit = 40
-                    if speed_kmh > speed_limit:
-                        banner_frames = 30  # Show banner for next 30 frames
-
-                    cv2.putText(frame, label, (x4, y4), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
-
-        # Show top banner if speeding detected in recent frames
-        if banner_frames > 0:
-            cv2.rectangle(frame, (0, 0), (1020, 40), (0, 0, 255), -1)
-            cv2.putText(frame, "Over Speeding!", (20, 30), cv2.FONT_HERSHEY_SIMPLEX,
-                        1, (255, 255, 255), 2)
-            banner_frames -= 1
-
-        # Draw lines
+        # Visuals
         cv2.line(frame, (274, cy1), (814, cy1), (255, 255, 255), 1)
+        cv2.putText(frame, 'L1', (277, 320), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
         cv2.line(frame, (177, cy2), (927, cy2), (255, 255, 255), 1)
+        cv2.putText(frame, 'L2', (182, 367), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
 
-        _, jpeg = cv2.imencode('.jpg', frame)
-        frame_bytes = jpeg.tobytes()
-        yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+        # Count display
+        cv2.putText(frame, f'Going down: {len(counter)}', (60, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
+        cv2.putText(frame, f'Going up: {len(counter1)}', (60, 130), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
 
-    cap.release()
+        output.write(frame)
+        cv2.imshow("RGB", frame)
+        if cv2.waitKey(1) & 0xFF == 27:
+            break
+
+cap.release()
+output.release()
+cv2.destroyAllWindows()
