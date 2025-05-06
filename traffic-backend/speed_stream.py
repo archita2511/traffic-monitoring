@@ -1,111 +1,96 @@
 import cv2
 from ultralytics import YOLO
-from tracker import Tracker
+from tracker import update_tracker
 import pandas as pd
 
+# Load YOLO model once
+model = YOLO("yolov8s.pt")
+
+# Calibration: meters per pixel and frame skipping
+METERS_PER_PIXEL = 0.2
+FRAME_SKIP = 3
+
+# Crossing lines (y‑coordinates) and tolerance
+CY_START, CY_END = 322, 368
+OFFSET = 6
+
+# State for each direction
+frame_count = 0
+entries_down = {}
+entries_up   = {}
+counted_down = set()
+counted_up   = set()
+
 def generate_stream(path):
-    model = YOLO("yolov8s.pt")
+    global frame_count
     cap = cv2.VideoCapture(path)
-    tracker = Tracker(max_distance=40)
-
-    meters_per_pixel = 0.2
-    cy1, cy2 = 322, 368
-    offset = 10
-    vh_down, vh_up, counter, counter1 = {}, {}, [], []
-
-    fps = cap.get(cv2.CAP_PROP_FPS)
-    count = 0
-
-    with open("coco.txt", "r") as f:
-        class_list = f.read().splitlines()
-
-    # To persist banner for a few frames
-    banner_frames = 0
+    fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
 
     while True:
         ret, frame = cap.read()
         if not ret:
             break
 
-        count += 1
-        if count % 2 != 0:
+        frame_count += 1
+        if frame_count < 10 or frame_count % FRAME_SKIP != 0:
             continue
 
         frame = cv2.resize(frame, (1020, 500))
-        results = model.predict(frame)
-        boxes = results[0].boxes.data
-        px = pd.DataFrame(boxes).astype("float")
+        results = model.predict(frame)[0]
+        boxes = results.boxes.data.cpu().numpy()  # [x1,y1,x2,y2,conf,cls]
+        df = pd.DataFrame(boxes, columns=["x1","y1","x2","y2","conf","cls"])
 
+        # Filter vehicle classes: car(2), motorcycle(3), bus(5), truck(7)
         detections = []
-        for _, row in px.iterrows():
-            x1, y1, x2, y2 = map(int, row[:4])
-            class_id = int(row[5])
-            if 'car' in class_list[class_id]:
+        for _, row in df.iterrows():
+            if int(row.cls) in {2, 3, 5, 7}:
+                x1, y1, x2, y2 = map(int, row[["x1","y1","x2","y2"]])
                 detections.append([x1, y1, x2, y2])
 
-        bbox_id = tracker.update(detections)
-        for bbox in bbox_id:
-            x3, y3, x4, y4, obj_id = bbox
-            cx, cy = (x3 + x4) // 2, (y3 + y4) // 2
+        # Assign persistent IDs
+        tracked = update_tracker(detections)
 
-            cv2.rectangle(frame, (x3, y3), (x4, y4), (0, 255, 0), 2)
+        for x1, y1, x2, y2, obj_id in tracked:
+            cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
+            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            cv2.circle(frame, (cx, cy), 4, (0, 0, 255), -1)
+            cv2.putText(frame, f"ID {obj_id}", (x1, y1 - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
 
-            # Downward direction
-            if cy1 - offset < cy < cy1 + offset:
-                vh_down[obj_id] = count
+            # Downward direction timing
+            if CY_START - OFFSET < cy < CY_START + OFFSET:
+                entries_down[obj_id] = frame_count
+            if (obj_id in entries_down and
+                CY_END - OFFSET < cy < CY_END + OFFSET and
+                obj_id not in counted_down):
+                elapsed = (frame_count - entries_down[obj_id]) * FRAME_SKIP / fps
+                pixel_dist = abs(CY_END - CY_START)
+                speed = (METERS_PER_PIXEL * pixel_dist / elapsed) * 3.6
+                counted_down.add(obj_id)
+                cv2.putText(frame, f"{int(speed)} km/h",
+                            (x2, y2 + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
 
-            if obj_id in vh_down and cy2 - offset < cy < cy2 + offset:
-                pixel_distance = abs(cy2 - cy1)
-                real_world_distance = meters_per_pixel * pixel_distance
-                frames_crossed = count - vh_down[obj_id]
-                elapsed_time = (frames_crossed * 2) / fps
+            # Upward direction timing
+            if CY_END - OFFSET < cy < CY_END + OFFSET:
+                entries_up[obj_id] = frame_count
+            if (obj_id in entries_up and
+                CY_START - OFFSET < cy < CY_START + OFFSET and
+                obj_id not in counted_up):
+                elapsed = (frame_count - entries_up[obj_id]) * FRAME_SKIP / fps
+                pixel_dist = abs(CY_END - CY_START)
+                speed = (METERS_PER_PIXEL * pixel_dist / elapsed) * 3.6
+                counted_up.add(obj_id)
+                cv2.putText(frame, f"{int(speed)} km/h",
+                            (x2, y2 + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
 
-                if obj_id not in counter:
-                    counter.append(obj_id)
-                    speed_kmh = (real_world_distance / elapsed_time) * 3.6
-                    if speed_kmh > 40:
-                        label = "Overspeeding vehicle"
-                    elif speed_kmh >= 20:
-                        label = "Within speed limit"
-                    else:
-                        label = "Slow vehicle"
-                    cv2.putText(frame, label, (x4, y4), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+        # Draw reference lines
+        h, w = frame.shape[:2]
+        cv2.line(frame, (0, CY_START), (w, CY_START), (255, 255, 255), 1)
+        cv2.line(frame, (0, CY_END),   (w, CY_END),   (255, 255, 255), 1)
 
-            # Upward direction
-            if cy2 - offset < cy < cy2 + offset:
-                vh_up[obj_id] = count
-
-            if obj_id in vh_up and cy1 - offset < cy < cy1 + offset:
-                pixel_distance = abs(cy2 - cy1)
-                real_world_distance = meters_per_pixel * pixel_distance
-                frames_crossed = count - vh_up[obj_id]
-                elapsed_time = (frames_crossed * 2) / fps
-
-                if obj_id not in counter1:
-                    counter1.append(obj_id)
-                    speed_kmh = (real_world_distance / elapsed_time) * 3.6
-                    label = f"{int(speed_kmh)} Km/h"
-
-                    speed_limit = 40
-                    if speed_kmh > speed_limit:
-                        banner_frames = 30  # Show banner for next 30 frames
-
-                    cv2.putText(frame, label, (x4, y4), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
-
-        # Show top banner if speeding detected in recent frames
-        if banner_frames > 0:
-            cv2.rectangle(frame, (0, 0), (1020, 40), (0, 0, 255), -1)
-            cv2.putText(frame, "Over Speeding!", (20, 30), cv2.FONT_HERSHEY_SIMPLEX,
-                        1, (255, 255, 255), 2)
-            banner_frames -= 1
-
-        # Draw lines
-        cv2.line(frame, (274, cy1), (814, cy1), (255, 255, 255), 1)
-        cv2.line(frame, (177, cy2), (927, cy2), (255, 255, 255), 1)
-
-        _, jpeg = cv2.imencode('.jpg', frame)
-        frame_bytes = jpeg.tobytes()
+        # Yield encoded JPEG frame
+        ret, jpg = cv2.imencode('.jpg', frame)
         yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+               b'Content-Type: image/jpeg\r\n\r\n' + jpg.tobytes() + b'\r\n')
 
     cap.release()
