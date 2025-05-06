@@ -67,10 +67,10 @@ def generate_stream(path):
                 pixel_dist = abs(CY_END - CY_START)
                 speed = (METERS_PER_PIXEL * pixel_dist / elapsed) * 3.6
                 counted_down.add(obj_id)
-                if speed > 30:
+                if speed > 20:
                     label = "Overspeeding vehicle"
                     banner_frames = 10
-                elif speed >= 20:
+                elif speed >= 10:
                     label = "Within speed limit"
                 else:
                     label = "Slow vehicle"
@@ -87,10 +87,10 @@ def generate_stream(path):
                 pixel_dist = abs(CY_END - CY_START)
                 speed = (METERS_PER_PIXEL * pixel_dist / elapsed) * 3.6
                 counted_up.add(obj_id)
-                if speed > 30:
+                if speed > 20:
                     label = "Overspeeding vehicle"
                     banner_frames = 10
-                elif speed >= 20:
+                elif speed >= 10:
                     label = "Within speed limit"
                 else:
                     label = "Slow vehicle"
@@ -117,3 +117,4 @@ def generate_stream(path):
                b'Content-Type: image/jpeg\r\n\r\n' + jpg.tobytes() + b'\r\n')
 
     cap.release()
+    
