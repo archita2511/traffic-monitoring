@@ -25,7 +25,7 @@ def generate_stream(path):
     global frame_count
     cap = cv2.VideoCapture(path)
     fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
-
+    banner_frames = 0
     while True:
         ret, frame = cap.read()
         if not ret:
@@ -67,8 +67,15 @@ def generate_stream(path):
                 pixel_dist = abs(CY_END - CY_START)
                 speed = (METERS_PER_PIXEL * pixel_dist / elapsed) * 3.6
                 counted_down.add(obj_id)
-                cv2.putText(frame, f"{int(speed)} km/h",
-                            (x2, y2 + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+                if speed > 30:
+                    label = "Overspeeding vehicle"
+                    banner_frames = 10
+                elif speed >= 20:
+                    label = "Within speed limit"
+                else:
+                    label = "Slow vehicle"
+                cv2.putText(frame, label, (x2, y2), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+
 
             # Upward direction timing
             if CY_END - OFFSET < cy < CY_END + OFFSET:
@@ -80,14 +87,30 @@ def generate_stream(path):
                 pixel_dist = abs(CY_END - CY_START)
                 speed = (METERS_PER_PIXEL * pixel_dist / elapsed) * 3.6
                 counted_up.add(obj_id)
-                cv2.putText(frame, f"{int(speed)} km/h",
-                            (x2, y2 + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+                if speed > 30:
+                    label = "Overspeeding vehicle"
+                    banner_frames = 10
+                elif speed >= 20:
+                    label = "Within speed limit"
+                else:
+                    label = "Slow vehicle"
+                cv2.putText(frame, label, (x2, y2), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+               
+        # Show top banner if speeding detected in recent frames
+        if banner_frames > 0:
+            cv2.rectangle(frame, (0, 0), (1020, 40), (0, 0, 255), -1)
+            cv2.putText(frame, "Over Speeding!", (20, 30), cv2.FONT_HERSHEY_SIMPLEX,
+                        1, (255, 255, 255), 2)
+            banner_frames -= 1
 
         # Draw reference lines
         h, w = frame.shape[:2]
         cv2.line(frame, (0, CY_START), (w, CY_START), (255, 255, 255), 1)
         cv2.line(frame, (0, CY_END),   (w, CY_END),   (255, 255, 255), 1)
-
+        d = len(counted_down)
+        u = len(counted_up)
+        cv2.putText(frame, 'Going down: ' + str(d), (60, 90), cv2.FONT_HERSHEY_COMPLEX, 0.8, (0, 255, 255), 2)
+        cv2.putText(frame, 'Going up: ' + str(u), (60, 130), cv2.FONT_HERSHEY_COMPLEX, 0.8, (0, 255, 255), 2)
         # Yield encoded JPEG frame
         ret, jpg = cv2.imencode('.jpg', frame)
         yield (b'--frame\r\n'
