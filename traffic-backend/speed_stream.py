@@ -60,7 +60,12 @@ def generate_stream(path):
                 if obj_id not in counter:
                     counter.append(obj_id)
                     speed_kmh = (real_world_distance / elapsed_time) * 3.6
-                    label = f"{int(speed_kmh)} Km/h"
+                    if speed_kmh > 40:
+                        label = "Overspeeding vehicle"
+                    elif speed_kmh >= 20:
+                        label = "Within speed limit"
+                    else:
+                        label = "Slow vehicle"
                     cv2.putText(frame, label, (x4, y4), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
 
             # Upward direction
