@@ -5,7 +5,7 @@ import torch
 import argparse
 from torchvision import models
 from torchvision.transforms import functional as F
-from tracker import update_tracker  # Use one tracker.py, adjust threshold via param
+from tracker import update_tracker
 
 def load_model(model_type):
     if model_type == 'rcnn':
