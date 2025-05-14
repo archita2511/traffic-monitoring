@@ -5,7 +5,7 @@ def estimate_speed(frame_gap, distance_pixels, mpp, frame_rate):
 
 def draw_annotations(frame, bbox, track_id, speed=None, label=None):
     x1, y1, x2, y2 = bbox
-    x_mid = (x1 + x2) // 2,
+    x_mid = (x1 + x2) // 2
     y_mid = (y1 + y2) // 2
 
     cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 255), 2)

@@ -91,7 +91,6 @@ def process_video(model_name, video_path):
                     draw_annotations(resized_frame, (x1, y1, x2, y2), track_id, spd)
 
             draw_crossing_lines(resized_frame, line_y1, line_y2)
-            draw_direction_count(resized_frame, len(down_crossed) + 1, len(up_crossed))
 
             writer.write(resized_frame)
             cv2.imshow("Tracking Output", resized_frame)

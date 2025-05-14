@@ -21,6 +21,8 @@ def upload_video():
 
 @app.route('/video_feed')
 def video_feed():
+    if not video_path or not os.path.exists(video_path):
+        return "No video uploaded", 400
     return Response(
         generate_stream(video_path),
         mimetype='multipart/x-mixed-replace; boundary=frame'
