@@ -3,8 +3,6 @@ import pandas as pd
 from ultralytics import YOLO
 from tracker import update_tracker
 
-# ------------------ Configuration ------------------
-
 YOLO_MODEL_PATH = "yolov8s.pt"
 FRAME_SIZE = (1020, 500)
 METERS_PER_PIXEL = 0.2
@@ -74,7 +72,6 @@ def generate_stream(video_path):
         results = model.predict(frame)[0]
         detections_df = pd.DataFrame(results.boxes.data.cpu().numpy(), columns=["x1", "y1", "x2", "y2", "conf", "cls"])
 
-        # Filter vehicles
         detections = []
         for _, row in detections_df.iterrows():
             if int(row.cls) in {2, 3, 5, 7}:
