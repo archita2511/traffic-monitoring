@@ -65,7 +65,7 @@ def process_video(model_name, video_path):
 
     with open(f'vehicle_log_{model_name}.csv', 'w', newline='') as log_file:
         logger = csv.writer(log_file)
-        logger.writerow(["Vehicle ID", "Direction", "Speed (Km/h)", "Timestamp"])
+        logger.writerow(["Vehicle ID", "Vehicle Direction", "Speed in Km/hr", "Timestamp"])
 
         while cap.isOpened():
             success, frame = cap.read()

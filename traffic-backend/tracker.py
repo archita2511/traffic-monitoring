@@ -25,7 +25,6 @@ def update_tracker(detections):
         cx, cy = obj.estimate[0]
         obj_id = obj.id
 
-        # Reconstruct a bounding box around the center
         box_size = 40
         x1 = int(cx - box_size / 2)
         y1 = int(cy - box_size / 2)

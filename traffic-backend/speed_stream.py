@@ -47,8 +47,8 @@ def draw_lines_and_counts(frame, down_count, up_count, banner=False):
     h, w = frame.shape[:2]
     cv2.line(frame, (0, LINE_Y_START), (w, LINE_Y_START), (255, 255, 255), 1)
     cv2.line(frame, (0, LINE_Y_END),   (w, LINE_Y_END),   (255, 255, 255), 1)
-    cv2.putText(frame, f'Going down: {down_count}', (60, 90), cv2.FONT_HERSHEY_COMPLEX, 0.8, (0, 255, 255), 2)
-    cv2.putText(frame, f'Going up: {up_count}',     (60, 130), cv2.FONT_HERSHEY_COMPLEX, 0.8, (0, 255, 255), 2)
+    cv2.putText(frame, f'Count of vehicles going down: {down_count}', (60, 90), cv2.FONT_HERSHEY_COMPLEX, 0.8, (0, 255, 255), 2)
+    cv2.putText(frame, f'Count of vehicles going up: {up_count}',     (60, 130), cv2.FONT_HERSHEY_COMPLEX, 0.8, (0, 255, 255), 2)
     if banner:
         cv2.rectangle(frame, (0, 0), (w, 40), (0, 0, 255), -1)
         cv2.putText(frame, "Over Speeding!", (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
