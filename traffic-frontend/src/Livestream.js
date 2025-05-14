@@ -56,7 +56,7 @@ export default function LiveStream() {
         <Box mt={4}>
           <img
             src="http://localhost:5000/video_feed"
-            alt="Video stream"
+            alt="Preview of video"
             style={{
               width: "80%",
               maxWidth: "900px",
