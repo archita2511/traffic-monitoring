@@ -14,5 +14,3 @@ python main.py --model rcnn --video path/to/video.mp4
 or
 python main.py --model ssd --video path/to/video.mp4
 3. You can view the video with the count of vehicles in either of the directions, speed of each vehicle, etc.,
-
-   
